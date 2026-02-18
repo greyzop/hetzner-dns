@@ -175,8 +175,29 @@ class HetznerDNS {
       $query = '';
     }
 
-    return $this->curl('GET', '/zones/' . $options['zone_id'] . '/rrsets');
+        $allRecords = [];
+    $page = 1;
+    $perPage = 100;
 
+    do {
+        $response = $this->curl(
+            'GET',
+            '/zones/' . $options['zone_id'] . '/rrsets?type=AAAA&type=A&per_page=' . $perPage . '&page=' . $page
+        );
+
+        // Merge current page results
+        $allRecords = array_merge($allRecords, $response['rrsets']);
+
+        // Pagination info
+        $pagination = $response['meta']['pagination'];
+        $page = $pagination['next_page'];
+        if ($pagination['next_page'] == $pagination['last_page']) {
+                $page=null;
+        }
+
+    } while ($page);
+
+    return $allRecords;
   }
 
   //Get a DNS record
