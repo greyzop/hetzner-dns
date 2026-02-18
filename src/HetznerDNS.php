@@ -26,16 +26,20 @@ class HetznerDNS {
   private function curl($method, $url, array $options = null, $body = null){
 
     $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, 'https://dns.hetzner.com/api/v1' . $url);
+    //curl_setopt($ch, CURLOPT_URL, 'https://dns.hetzner.com/api/v1' . $url);
+    curl_setopt($ch, CURLOPT_URL, 'https://api.hetzner.cloud/v1' . $url);
     curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 
+    //$headers = [
+    //  'Auth-API-Token: ' . $this->api_token,
+    //];
     $headers = [
-      'Auth-API-Token: ' . $this->api_token,
+      'Authorization: Bearer ' . $this->api_token,
     ];
 
     if($method == 'POST' || $method == 'PUT'){
-    
+      
       curl_setopt($ch, CURLOPT_POST, 1);
 
       if(!empty($body)){
@@ -59,31 +63,31 @@ class HetznerDNS {
 
     switch ($status) {
       case '200':
-        break;
+      break;
 
       case '400':
-        $this->error('Pagination selectors are mutually exclusive');
-        break;
+      $this->error('Pagination selectors are mutually exclusive');
+      break;
 
       case '401':
-        $this->error('Unauthorized');
-        break;
+      $this->error('Unauthorized');
+      break;
 
       case '403':
-        $this->error('Forbidden');
-        break;
+      $this->error('Forbidden');
+      break;
 
       case '404':
-        $this->error('Not Found');
-        break;        
+      $this->error('Not Found');
+      break;        
 
       case '406':
-        $this->error('Not acceptable');
-        break;
+      $this->error('Not acceptable');
+      break;
 
       case '422':
-        $this->error('Unprocessable entity');
-        break;
+      $this->error('Unprocessable entity');
+      break;
     }
 
     return json_decode($response, true); //Respone in array
@@ -126,7 +130,7 @@ class HetznerDNS {
       $query = '';
     }
 
-    return $this->curl('GET', '/zones?' . $query);
+    return $this->curl('GET', '/zones' . $query);
 
   }
 
@@ -157,9 +161,9 @@ class HetznerDNS {
   public function createRecord($options){
 
     #Required Options: name, type, value, zone_id
-
-    return $this->curl('POST', '/records', $options);
-
+    //$options['records'] = array('value' => $options['']);
+    return $this->curl('POST', '/zones/' . $options['zone_id'] .'/rrsets', $options);
+    
   }
 
   //Get all DNS records
@@ -171,7 +175,7 @@ class HetznerDNS {
       $query = '';
     }
 
-    return $this->curl('GET', '/records?' . $query);
+    return $this->curl('GET', '/zones/' . $options['zone_id'] . '/rrsets');
 
   }
 
@@ -183,18 +187,20 @@ class HetznerDNS {
   }
 
   //Update DNS record
-  public function updateRecord($id, $options){
+  public function updateRecord($recordId,$options){
 
     #Required Options: name, type, value, zone_id
 
-    return $this->curl('PUT', '/records/' . $id, $options);
+    return $this->curl('POST', '/zones/' . $options['zone_id'] .'/rrsets/'. $recordId .'/actions/set_records', $updates);
 
   }
 
   //Delete DNS record
-  public function deleteRecord($id){
+  public function deleteRecord($options){
 
-    return $this->curl('DELETE', '/records/' . $id);
+    #Required Options: name, type, zone_id
+
+    return $this->curl('DELETE', '/zones/'.$options['zone_id'].'/rrsets/' . $options['name'] . '/' . $options['type']);
 
   }
 
