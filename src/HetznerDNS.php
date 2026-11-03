@@ -23,7 +23,7 @@ class HetznerDNS {
 
   }
 
-  private function curl($method, $url, array $options = null, $body = null){
+  private function curl($method, $url, ?array $options = null, $body = null){
 
     $ch = curl_init();
     //curl_setopt($ch, CURLOPT_URL, 'https://dns.hetzner.com/api/v1' . $url);
@@ -58,41 +58,23 @@ class HetznerDNS {
 
     curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 
-    $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $response = curl_exec($ch);
+    // The status is only known after the request
+    $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curl_error = curl_error($ch);
 
-    switch ($status) {
-      case '200':
-      break;
-
-      case '400':
-      $this->error('Pagination selectors are mutually exclusive');
-      break;
-
-      case '401':
-      $this->error('Unauthorized');
-      break;
-
-      case '403':
-      $this->error('Forbidden');
-      break;
-
-      case '404':
-      $this->error('Not Found');
-      break;        
-
-      case '406':
-      $this->error('Not acceptable');
-      break;
-
-      case '422':
-      $this->error('Unprocessable entity');
-      break;
+    if($response === false){
+      return $this->error('Request failed: ' . $curl_error);
     }
 
-    return json_decode($response, true); //Respone in array
+    $result = json_decode($response, true); //Respone in array
 
-    curl_close($ch);
+    if($status < 200 || $status >= 300){
+      $message = isset($result['error']['message']) ? $result['error']['message'] : substr($response, 0, 200);
+      return $this->error('HTTP ' . $status . ': ' . $message);
+    }
+
+    return $result;
 
   }
 
@@ -122,7 +104,7 @@ class HetznerDNS {
   }
 
   //Get all DNS zones
-  public function getZones(array $options = null){
+  public function getZones(?array $options = null){
 
     if($options){
       $query = http_build_query($options);
@@ -167,7 +149,7 @@ class HetznerDNS {
   }
 
   //Get all DNS records
-  public function getRecords(array $options = null){
+  public function getRecords(?array $options = null){
 
     if($options){
       $query = http_build_query($options);
@@ -185,15 +167,15 @@ class HetznerDNS {
             '/zones/' . $options['zone_id'] . '/rrsets?type=AAAA&type=A&per_page=' . $perPage . '&page=' . $page
         );
 
+        if (!isset($response['rrsets'])) {
+            return $response; // error
+        }
+
         // Merge current page results
         $allRecords = array_merge($allRecords, $response['rrsets']);
 
-        // Pagination info
-        $pagination = $response['meta']['pagination'];
-        $page = $pagination['next_page'];
-        if ($pagination['next_page'] == $pagination['last_page']) {
-                $page=null;
-        }
+        // Pagination info: next_page is null on the last page
+        $page = $response['meta']['pagination']['next_page'];
 
     } while ($page);
 
@@ -210,7 +192,9 @@ class HetznerDNS {
   //Update DNS record
   public function updateRecord($recordId,$options){
 
-    #Required Options: name, type, value, zone_id
+    #Required Options: records, zone_id
+
+    $updates = array('records' => $options['records']);
 
     return $this->curl('POST', '/zones/' . $options['zone_id'] .'/rrsets/'. $recordId .'/actions/set_records', $updates);
 
